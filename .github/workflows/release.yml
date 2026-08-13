@@ -27,7 +27,7 @@ jobs:
             echo "package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
             exit 1
           fi
-      - name: Publish to npm (runs prepublishOnly: typecheck + lint + test + build)
+      - name: "Publish to npm (runs prepublishOnly: typecheck + lint + test + build)"
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

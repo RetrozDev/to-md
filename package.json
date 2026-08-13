@@ -1,6 +1,6 @@
 {
   "name": "@retroz/to-md",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fetch any web page and print its main content as clean, LLM-friendly Markdown straight to your terminal.",
   "type": "module",
   "license": "MIT",

@@ -38,6 +38,7 @@ interface CliOptions {
   stdin?: boolean;
   urlsFile?: string;
   source?: string;
+  proxy?: string;
   links?: boolean;
   images?: boolean;
 }
@@ -75,6 +76,7 @@ function toOptions(opts: CliOptions): ToMdOptions {
       opts.maxTokens !== undefined ? parseIntOption(String(opts.maxTokens), "--max-tokens") : undefined,
     timeoutMs: parseIntOption(String(opts.timeout), "--timeout"),
     userAgent: opts.ua,
+    proxy: opts.proxy,
     includeHeader: opts.header,
   };
 }
@@ -128,6 +130,7 @@ program
   .option("--urls-file <file>", "read page URL(s) from a file, one per line (# comments and blank lines are ignored)")
   .option("--timeout <ms>", `request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})`, String(DEFAULT_TIMEOUT_MS))
   .option("--ua <string>", "custom User-Agent")
+  .option("--proxy <url>", "proxy URL (default: HTTPS_PROXY/HTTP_PROXY env vars, honoring NO_PROXY)")
   .option("-q, --quiet", "suppress warnings on stderr")
   .showHelpAfterError()
   .action(async (urls: string[], opts: CliOptions) => {

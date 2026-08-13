@@ -93,6 +93,7 @@ to-md [options] <url...>
 | `--urls-file <file>` | Read page URL(s) from a file (one per line; `#` comments and blank lines ignored). |
 | `--timeout <ms>` | Request timeout (default: `30000`). |
 | `--ua <string>` | Custom User-Agent. |
+| `--proxy <url>` | Proxy URL (default: `HTTPS_PROXY`/`HTTP_PROXY` env vars, honoring `NO_PROXY`). |
 | `-q, --quiet` | Suppress warnings on stderr. |
 | `-V, --version` | Print the version. |
 | `-h, --help` | Show help. |
@@ -165,10 +166,18 @@ interface ToMdResult {
 ```
 
 Options mirror the CLI flags (`selector`, `raw`, `maxChars`, `maxTokens`,
-`timeoutMs`, `userAgent`, `headers`, `includeHeader`, `title`, `links`,
+`timeoutMs`, `userAgent`, `proxy`, `headers`, `includeHeader`, `title`, `links`,
 `images`). `markdownFromHtml(html, sourceUrl, options)` converts HTML you already
 have (no fetch). Lower-level building blocks are exported too: `fetchDocument`,
 `extractContent`, `htmlToMarkdown`, and `ToMdError`.
+
+## Proxy support
+
+`to-md` follows the standard HTTP client conventions: with no explicit proxy, it
+uses the `HTTPS_PROXY`/`HTTP_PROXY` environment variables (lowercase variants
+included) for the matching protocol, and honors `NO_PROXY`/`no_proxy` to bypass
+the proxy for specific hosts (exact host, `.domain`, `*.domain`, or `*`). An
+explicit `--proxy <url>` (or `proxy` option) always wins.
 
 ## How it works
 

@@ -52,6 +52,12 @@ export interface ToMdOptions {
    */
   headers?: Record<string, string>;
   /**
+   * Proxy URL (e.g. `http://127.0.0.1:8080`). When unset, the conventional
+   * `HTTPS_PROXY`/`HTTP_PROXY` (and lowercase) environment variables are used,
+   * honouring `NO_PROXY`/`no_proxy` for host bypasses.
+   */
+  proxy?: string;
+  /**
    * Prepend a Markdown header (`# Title` + `_Source: URL_`) to the output.
    * Defaults to `true`.
    */

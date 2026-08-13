@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer, type Server } from "node:http";
+import { startForwardProxy } from "./test/helpers.js";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -295,5 +296,21 @@ describe("to-md CLI", () => {
     ]);
     expect(code).not.toBe(0);
     expect(stderr).toContain("could not read urls file");
+  });
+
+  it("routes requests through --proxy", async () => {
+    const proxy = await startForwardProxy();
+    try {
+      const { stdout, code } = await runCli([
+        "--proxy",
+        `http://127.0.0.1:${proxy.port}`,
+        `${base}/guide`,
+      ]);
+      expect(code).toBe(0);
+      expect(stdout).toContain("**simple, repeatable**");
+      expect(proxy.hits()).toBeGreaterThan(0);
+    } finally {
+      await proxy.close();
+    }
   });
 });

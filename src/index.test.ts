@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
 import { markdownFromHtml, toMarkdown } from "./index.js";
+import { startForwardProxy } from "./test/helpers.js";
 
 const SAMPLE = readFileSync(
   new URL("./test/fixtures/sample.html", import.meta.url),
@@ -155,5 +156,55 @@ describe("markdownFromHtml", () => {
     const result = markdownFromHtml(SAMPLE, `${base}/guide`, { maxChars: 80 });
     expect(result.truncated).toBe(true);
     expect(result.markdown).toContain("<!-- truncated");
+  });
+});
+
+describe("proxy support", () => {
+  let proxy: Awaited<ReturnType<typeof startForwardProxy>> | null = null;
+
+  beforeAll(async () => {
+    proxy = await startForwardProxy();
+  });
+
+  afterAll(async () => {
+    await proxy?.close();
+  });
+
+  function restoreEnv(names: string[]): void {
+    for (const name of names) delete process.env[name];
+  }
+
+  it("routes the request through an explicit proxy", async () => {
+    const before = proxy!.hits();
+    const result = await toMarkdown(`${base}/guide`, {
+      proxy: `http://127.0.0.1:${proxy!.port}`,
+    });
+    expect(result.markdown).toContain("**simple, repeatable**");
+    expect(proxy!.hits()).toBeGreaterThan(before);
+  });
+
+  it("falls back to the HTTP_PROXY environment variable", async () => {
+    const before = proxy!.hits();
+    process.env.HTTP_PROXY = `http://127.0.0.1:${proxy!.port}`;
+    try {
+      const result = await toMarkdown(`${base}/guide`);
+      expect(result.markdown).toContain("**simple, repeatable**");
+      expect(proxy!.hits()).toBeGreaterThan(before);
+    } finally {
+      restoreEnv(["HTTP_PROXY", "http_proxy"]);
+    }
+  });
+
+  it("bypasses the proxy when the host matches NO_PROXY", async () => {
+    const before = proxy!.hits();
+    process.env.HTTP_PROXY = "http://127.0.0.1:1";
+    process.env.NO_PROXY = "127.0.0.1";
+    try {
+      const result = await toMarkdown(`${base}/guide`);
+      expect(result.markdown).toContain("**simple, repeatable**");
+      expect(proxy!.hits()).toBe(before);
+    } finally {
+      restoreEnv(["HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"]);
+    }
   });
 });

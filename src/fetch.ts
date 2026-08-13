@@ -1,3 +1,5 @@
+import { ProxyAgent } from "undici";
+import type { Dispatcher } from "undici";
 import type { FetchedDocument, ToMdOptions } from "./types.js";
 
 export const DEFAULT_USER_AGENT = "to-md/0.1.0";
@@ -6,6 +8,57 @@ export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 
 export class ToMdError extends Error {
   override name = "ToMdError";
+}
+
+/**
+ * Match a hostname against a `NO_PROXY` entry (curl conventions): exact host,
+ * `.domain` or `*.domain` for subdomains, or `*` for everything.
+ */
+function matchesNoProxy(hostname: string, noProxy: string): boolean {
+  const host = hostname.toLowerCase();
+  return noProxy
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .some((entry) => {
+      if (entry === "*") return true;
+      if (entry.startsWith("*.")) {
+        const suffix = entry.slice(2);
+        return host === suffix || host.endsWith("." + suffix);
+      }
+      if (entry.startsWith(".")) {
+        const suffix = entry.slice(1);
+        return host === suffix || host.endsWith("." + suffix);
+      }
+      return host === entry;
+    });
+}
+
+/**
+ * Resolve the proxy to use for a target URL, in conventional precedence order:
+ * explicit option, `NO_PROXY` bypass, then the protocol-matching env variable.
+ */
+function proxyUrlFor(url: URL, explicit: string | undefined): string | undefined {
+  if (explicit) return explicit;
+  const noProxy = process.env.NO_PROXY ?? process.env.no_proxy;
+  if (noProxy && matchesNoProxy(url.hostname, noProxy)) return undefined;
+  const names =
+    url.protocol === "https:" ? ["HTTPS_PROXY", "https_proxy"] : ["HTTP_PROXY", "http_proxy"];
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function buildDispatcher(proxy: string | undefined): Dispatcher | undefined {
+  if (!proxy) return undefined;
+  try {
+    new URL(proxy);
+  } catch {
+    throw new ToMdError(`invalid proxy URL "${proxy}"`);
+  }
+  return new ProxyAgent(proxy);
 }
 
 function assertHttpUrl(raw: string): URL {
@@ -65,13 +118,14 @@ export async function fetchDocument(
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+  const dispatcher = buildDispatcher(proxyUrlFor(url, options.proxy));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   timer.unref?.();
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    const init: Parameters<typeof fetch>[1] = {
       signal: controller.signal,
       redirect: "follow",
       headers: {
@@ -80,7 +134,11 @@ export async function fetchDocument(
         "accept-language": "en,en-US;q=0.9",
         ...options.headers,
       },
-    });
+    };
+    if (dispatcher) {
+      init.dispatcher = dispatcher as unknown as typeof init.dispatcher;
+    }
+    response = await fetch(url, init);
   } catch (cause) {
     const reason =
       cause instanceof Error && cause.name === "AbortError"

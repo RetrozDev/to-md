@@ -1,5 +1,5 @@
 {
-  "name": "to-md",
+  "name": "@retroz/to-md",
   "version": "0.1.0",
   "description": "Fetch any web page and print its main content as clean, LLM-friendly Markdown straight to your terminal.",
   "type": "module",
@@ -23,8 +23,7 @@
     "url": "https://github.com/RetrozDev/to-md/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "bin": {
     "to-md": "./dist/cli.js"

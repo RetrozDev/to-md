@@ -37,11 +37,11 @@ to-md https://example.com/blog/... > article.md
 ## Install
 
 ```sh
-npm install -g to-md          # CLI
-npm install to-md             # or as a library
+npm install -g @retroz/to-md   # CLI
+npm install @retroz/to-md      # or as a library
 ```
 
-Requires Node.js ≥ 18.17.
+The binary stays `to-md`. Requires Node.js ≥ 18.17.
 
 ## CLI usage
 
@@ -83,7 +83,7 @@ to-md --no-header https://example.com/docs/quickstart
 ## Library usage
 
 ```ts
-import { toMarkdown } from "to-md";
+import { toMarkdown } from "@retroz/to-md";
 
 const result = await toMarkdown("https://example.com/article", {
   maxTokens: 4000,

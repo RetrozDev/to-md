@@ -146,6 +146,8 @@ npm run dev -- <url>      # run the CLI in watch mode
 npm run check             # typecheck + lint + test + build
 ```
 
+See [RELEASING.md](./RELEASING.md) for the release process.
+
 ## License
 
 MIT

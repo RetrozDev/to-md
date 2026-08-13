@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -229,5 +229,71 @@ describe("to-md CLI", () => {
     const { stderr, code } = await runCli([]);
     expect(code).not.toBe(0);
     expect(stderr).toContain("missing required argument");
+  });
+
+  it("reads URLs from a file with --urls-file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "to-md-"));
+    const list = join(dir, "urls.txt");
+    try {
+      writeFileSync(
+        list,
+        [
+          "# scrape list",
+          "",
+          `${base}/guide`,
+          `${base}/other`,
+          "# another comment",
+        ].join("\n"),
+        "utf8",
+      );
+      const { stdout, code } = await runCli(["--urls-file", list]);
+      expect(code).toBe(0);
+      expect(stdout).toContain("# How to Make Pour-Over Coffee");
+      expect(stdout).toContain("# Other Page");
+      expect(stdout).toContain("---");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("dedupes identical URLs from --urls-file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "to-md-"));
+    const list = join(dir, "urls.txt");
+    try {
+      writeFileSync(
+        list,
+        [`${base}/guide`, `${base}/guide`].join("\n"),
+        "utf8",
+      );
+      const { stdout, code } = await runCli(["--urls-file", list]);
+      expect(code).toBe(0);
+      const occurrences = stdout.split("# How to Make Pour-Over Coffee").length - 1;
+      expect(occurrences).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("combines positional URLs with --urls-file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "to-md-"));
+    const list = join(dir, "urls.txt");
+    try {
+      writeFileSync(list, `${base}/other\n`, "utf8");
+      const { stdout, code } = await runCli([`${base}/guide`, "--urls-file", list]);
+      expect(code).toBe(0);
+      expect(stdout).toContain("# How to Make Pour-Over Coffee");
+      expect(stdout).toContain("# Other Page");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("errors when --urls-file does not exist", async () => {
+    const { stderr, code } = await runCli([
+      "--urls-file",
+      join(tmpdir(), "to-md-missing.txt"),
+    ]);
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("could not read urls file");
   });
 });

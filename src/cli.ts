@@ -36,9 +36,30 @@ interface CliOptions {
   ua?: string;
   quiet?: boolean;
   stdin?: boolean;
+  urlsFile?: string;
   source?: string;
   links?: boolean;
   images?: boolean;
+}
+
+/**
+ * Read a list of URLs from a file: one per line, `#` comments and blank lines
+ * ignored. Returns `[]` when no file is given.
+ */
+function readUrlsFile(file: string | undefined): string[] {
+  if (file === undefined) return [];
+  let content = "";
+  try {
+    content = readFileSync(file, "utf8");
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    program.error(`could not read urls file "${file}": ${reason}`);
+  }
+  return content
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 
 function toOptions(opts: CliOptions): ToMdOptions {
@@ -104,6 +125,7 @@ program
   .option("--no-links", "keep link text but drop URLs (saves tokens)")
   .option("--no-images", "drop images")
   .option("--stdin", "read raw HTML from stdin instead of a URL")
+  .option("--urls-file <file>", "read page URL(s) from a file, one per line (# comments and blank lines are ignored)")
   .option("--timeout <ms>", `request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})`, String(DEFAULT_TIMEOUT_MS))
   .option("--ua <string>", "custom User-Agent")
   .option("-q, --quiet", "suppress warnings on stderr")
@@ -115,11 +137,21 @@ program
     if (opts.maxChars !== undefined && opts.maxTokens !== undefined) {
       program.error("options --max-chars and --max-tokens are mutually exclusive");
     }
-    if (opts.stdin && urls.length > 0) {
+    if (opts.stdin && opts.urlsFile) {
+      program.error("options --stdin and --urls-file are mutually exclusive");
+    }
+
+    const fileUrls = readUrlsFile(opts.urlsFile);
+    // Merge positional + file URLs, deduped (order preserved).
+    const urlList = Array.from(new Set([...urls, ...fileUrls]));
+
+    if (opts.stdin && urlList.length > 0) {
       program.error("option --stdin cannot be combined with URL arguments");
     }
-    if (!opts.stdin && urls.length === 0) {
-      program.error("missing required argument <url> (or use --stdin to read HTML from stdin)");
+    if (!opts.stdin && urlList.length === 0) {
+      program.error(
+        "missing required argument <url> (or use --urls-file, or --stdin to read HTML from stdin)",
+      );
     }
 
     try {
@@ -133,7 +165,7 @@ program
       }
 
       const results: ToMdResult[] = [];
-      for (const url of urls) {
+      for (const url of urlList) {
         const result = await toMarkdown(url, options);
         results.push(result);
         if (result.truncated && !opts.quiet) {

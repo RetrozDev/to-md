@@ -90,6 +90,7 @@ to-md [options] <url...>
 | `--no-links` | Keep link text but drop URLs (saves tokens). |
 | `--no-images` | Drop images. |
 | `--stdin` | Read raw HTML from stdin instead of a URL. |
+| `--urls-file <file>` | Read page URL(s) from a file (one per line; `#` comments and blank lines ignored). |
 | `--timeout <ms>` | Request timeout (default: `30000`). |
 | `--ua <string>` | Custom User-Agent. |
 | `-q, --quiet` | Suppress warnings on stderr. |
@@ -122,6 +123,9 @@ curl -s https://example.com/blog/post | to-md --stdin --source https://example.c
 
 # Batch a few sources into one Markdown document for a prompt
 to-md https://example.com/docs/a https://example.com/docs/b https://example.com/docs/c
+
+# Scrape a whole site from a URL list (one per line, # comments allowed)
+to-md --urls-file docs.txt
 ```
 
 ### Exit codes

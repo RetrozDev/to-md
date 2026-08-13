@@ -21,6 +21,12 @@ describe("extractContent", () => {
     expect(title).toBe("How to Make Pour-Over Coffee");
   });
 
+  it("extracts publication date and author metadata", () => {
+    const { publishedAt, author } = extractContent(SAMPLE, BASE);
+    expect(publishedAt).toBe("2026-08-13T10:00:00Z");
+    expect(author).toBe("Jane Doe");
+  });
+
   it("extracts the main content, dropping nav, ads and footer", () => {
     const { html } = extractContent(SAMPLE, BASE);
     expect(html).toContain("simple, repeatable");
@@ -72,8 +78,23 @@ describe("htmlToMarkdown", () => {
     );
   });
 
-  it("converts code to fenced blocks", () => {
-    expect(markdown()).toContain("```\nconst ratio = 16;");
+  it("converts code to fenced blocks with language hints", () => {
+    const md = markdown();
+    expect(md).toContain("```js\nconst ratio = 16;");
+    expect(md).toContain("```python\nprint(\"hi\")");
+  });
+
+  it("normalizes highlight.js language classes", () => {
+    const body = "word ".repeat(60);
+    const html = `<main><p>${body}</p><pre><code class="hljs javascript">const x = 1;</code></pre></main>`;
+    const { html: content } = extractContent(html, BASE);
+    expect(content).toContain('class="language-js"');
+  });
+
+  it("converts images to Markdown and resolves their URL", () => {
+    expect(markdown()).toContain(
+      "![Pour-over setup](https://example.com/images/pourover.jpg)",
+    );
   });
 
   it("converts tables to GFM tables", () => {

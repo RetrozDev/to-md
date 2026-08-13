@@ -27,6 +27,15 @@ export interface ToMdOptions {
    */
   maxTokens?: number;
   /**
+   * Keep Markdown links (`[text](url)`). Defaults to `true`. When `false`,
+   * link text is kept but URLs are dropped (saves tokens).
+   */
+  links?: boolean;
+  /**
+   * Keep images (`![alt](src)`). Defaults to `true`.
+   */
+  images?: boolean;
+  /**
    * Request timeout in milliseconds. Defaults to 30_000.
    */
   timeoutMs?: number;
@@ -63,6 +72,10 @@ export interface FetchedDocument {
 export interface ExtractedContent {
   /** Page title, from `<title>` or an Open Graph `og:title`. */
   title: string;
+  /** Publication date, from `article:published_time` / `date` meta tags. */
+  publishedAt?: string;
+  /** Author, from `author` / `article:author` meta tags. */
+  author?: string;
   /** The extracted main-content subtree as HTML. */
   html: string;
   /** The base URL used to resolve relative links. */

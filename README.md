@@ -74,7 +74,7 @@ The binary stays `to-md`. Requires Node.js ≥ 18.17.
 ## CLI usage
 
 ```sh
-to-md [options] <url>
+to-md [options] <url...>
 ```
 
 | Option | Description |
@@ -83,14 +83,21 @@ to-md [options] <url>
 | `-r, --raw` | Convert the whole page body instead of the auto-detected main content. |
 | `-o, --output <file>` | Write Markdown to a file instead of stdout. |
 | `-t, --title <title>` | Override the page title in the header. |
+| `--source <url>` | Source URL shown in the header (useful with `--stdin`). |
 | `--no-header` | Omit the `# Title` / `> Source:` header. |
 | `--max-chars <n>` | Truncate output to approximately `n` characters (cuts at paragraph boundaries). |
 | `--max-tokens <n>` | Truncate output to approximately `n` tokens (~4 chars each). |
+| `--no-links` | Keep link text but drop URLs (saves tokens). |
+| `--no-images` | Drop images. |
+| `--stdin` | Read raw HTML from stdin instead of a URL. |
 | `--timeout <ms>` | Request timeout (default: `30000`). |
 | `--ua <string>` | Custom User-Agent. |
 | `-q, --quiet` | Suppress warnings on stderr. |
 | `-V, --version` | Print the version. |
 | `-h, --help` | Show help. |
+
+Multiple URLs are converted in batch mode and concatenated with `---` separators,
+each keeping its own `# Title` / `> Source:` header.
 
 ### Examples
 
@@ -109,6 +116,12 @@ to-md --no-header https://example.com/docs/quickstart
 
 # Noisy single-page docs? Grab the exact node you want
 to-md --selector "#section-3" https://example.com/docs/manual
+
+# Convert a page you already have as HTML (no fetch)
+curl -s https://example.com/blog/post | to-md --stdin --source https://example.com/blog/post
+
+# Batch a few sources into one Markdown document for a prompt
+to-md https://example.com/docs/a https://example.com/docs/b https://example.com/docs/c
 ```
 
 ### Exit codes
@@ -148,9 +161,10 @@ interface ToMdResult {
 ```
 
 Options mirror the CLI flags (`selector`, `raw`, `maxChars`, `maxTokens`,
-`timeoutMs`, `userAgent`, `headers`, `includeHeader`, `title`). Lower-level
-building blocks are exported too: `fetchDocument`, `extractContent`,
-`htmlToMarkdown`, and `ToMdError`.
+`timeoutMs`, `userAgent`, `headers`, `includeHeader`, `title`, `links`,
+`images`). `markdownFromHtml(html, sourceUrl, options)` converts HTML you already
+have (no fetch). Lower-level building blocks are exported too: `fetchDocument`,
+`extractContent`, `htmlToMarkdown`, and `ToMdError`.
 
 ## How it works
 

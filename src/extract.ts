@@ -274,6 +274,7 @@ function cleanContent($: CheerioAPI, $root: Cheerio<AnyNode>): void {
   dropNearEmpty($, $root);
   dropLinkFarms($, $root);
   dropLinkParagraphs($, $root);
+  normalizeCodeLanguage($, $root);
   // Drop anchor-only links (empty text, no image).
   $root
     .find("a")
@@ -284,16 +285,86 @@ function cleanContent($: CheerioAPI, $root: Cheerio<AnyNode>): void {
     .remove();
 }
 
-function getTitle($: CheerioAPI): string {
-  const og = $('meta[property="og:title"]').attr("content");
-  if (og?.trim()) return cleanText(og);
-  const twitter = $('meta[name="twitter:title"]').attr("content");
-  if (twitter?.trim()) return cleanText(twitter);
-  const title = $("title").first().text();
-  if (title.trim()) return cleanText(title);
-  const h1 = $("h1").first().text();
-  if (h1.trim()) return cleanText(h1);
-  return "";
+// Common highlight.js language aliases -> canonical Markdown fence names.
+const HLJS_LANG: Record<string, string> = {
+  bash: "bash",
+  csharp: "csharp",
+  css: "css",
+  dockerfile: "dockerfile",
+  golang: "go",
+  html: "html",
+  java: "java",
+  javascript: "js",
+  jsx: "js",
+  json: "json",
+  kotlin: "kotlin",
+  md: "markdown",
+  markdown: "markdown",
+  php: "php",
+  py: "python",
+  python: "python",
+  ruby: "ruby",
+  rust: "rust",
+  scss: "scss",
+  sh: "bash",
+  shell: "bash",
+  sql: "sql",
+  swift: "swift",
+  tsx: "ts",
+  typescript: "ts",
+  xml: "xml",
+  yaml: "yaml",
+};
+
+function normalizeCodeLanguage($: CheerioAPI, $root: Cheerio<AnyNode>): void {
+  // Give the Markdown converter a `language-*` class so fenced code blocks get
+  // a hint (```js). Handles Pygments/ReadTheDocs (`language-*`) and highlight.js
+  // (`hljs <lang>` or bare `<lang>` classes).
+  $root.find("pre code").each((_, code) => {
+    const $code = $(code);
+    const classes = ($code.attr("class") ?? "")
+      .split(/\s+/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (classes.some((c) => /^language-[\w+-]+$/.test(c))) return;
+
+    for (const cls of classes) {
+      if (cls === "hljs") continue;
+      const lang = HLJS_LANG[cls.toLowerCase()] ?? cls.toLowerCase();
+      if (/^[a-z][\w+-]*$/.test(lang)) {
+        $code.attr("class", `language-${lang}`);
+        return;
+      }
+    }
+  });
+}
+
+function getMetadata($: CheerioAPI): {
+  title: string;
+  publishedAt: string;
+  author: string;
+} {
+  const content = (selector: string): string =>
+    cleanText($(selector).first().attr("content") ?? "");
+
+  const title =
+    content('meta[property="og:title"]') ||
+    content('meta[name="twitter:title"]') ||
+    cleanText($("title").first().text()) ||
+    cleanText($("h1").first().text());
+
+  const publishedAt =
+    content('meta[property="article:published_time"]') ||
+    content('meta[property="og:article:published_time"]') ||
+    content('meta[name="date"]') ||
+    content('meta[property="date"]');
+
+  const author =
+    content('meta[name="author"]') ||
+    content('meta[property="article:author"]') ||
+    content('meta[property="author"]');
+
+  return { title, publishedAt, author };
 }
 
 /**
@@ -306,7 +377,7 @@ export function extractContent(
   options: ToMdOptions = {},
 ): ExtractedContent {
   const $ = cheerioLoad(html);
-  const title = getTitle($);
+  const { title, publishedAt, author } = getMetadata($);
 
   let $root: Cheerio<AnyNode>;
 
@@ -340,5 +411,11 @@ export function extractContent(
   cleanContent($, $root);
   resolveUrls($, $root, baseUrl);
 
-  return { title, html: $.html($root), baseUrl };
+  return {
+    title,
+    publishedAt: publishedAt || undefined,
+    author: author || undefined,
+    html: $.html($root),
+    baseUrl,
+  };
 }

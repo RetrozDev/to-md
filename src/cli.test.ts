@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -41,8 +41,40 @@ async function runCli(args: string[]): Promise<CliResult> {
   }
 }
 
+async function runCliWithInput(args: string[], input: string): Promise<CliResult> {
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, [TSX, CLI, ...args], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (d) => {
+      stdout += d;
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d;
+    });
+    child.on("error", () => resolve({ stdout, stderr, code: 1 }));
+    child.on("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
 let server: Server;
 let base = "";
+
+const OTHER = `<!doctype html><html><head>
+<title>Other Page</title>
+<meta property="article:published_time" content="2026-08-01T08:00:00Z" />
+</head><body>
+<main>
+  <h1>Other Page</h1>
+  <p>This second page is used to verify that batch mode concatenates several articles into a single Markdown document. It carries enough readable sentences for the extractor to pick a main content container and convert everything into clean, token-friendly Markdown for an LLM.</p>
+</main>
+</body></html>`;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -50,6 +82,9 @@ beforeAll(async () => {
     if (url.pathname === "/guide") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(SAMPLE);
+    } else if (url.pathname === "/other") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(OTHER);
     } else {
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html><body>nothing</body></html>");
@@ -137,6 +172,62 @@ describe("to-md CLI", () => {
     const { stdout, code } = await runCli(["--help"]);
     expect(code).toBe(0);
     expect(stdout).toContain("Usage:");
-    expect(stdout).toContain("<url>");
+    expect(stdout).toContain("[urls...]");
+  });
+
+  it("reads raw HTML from stdin with --stdin", async () => {
+    const { stdout, code } = await runCliWithInput(["--stdin"], SAMPLE);
+    expect(code).toBe(0);
+    expect(stdout).toContain("# How to Make Pour-Over Coffee");
+    expect(stdout).toContain("**simple, repeatable**");
+    expect(stdout).not.toContain("> Source:");
+  });
+
+  it("uses --source with --stdin for the header", async () => {
+    const { stdout, code } = await runCliWithInput(
+      ["--stdin", "--source", "https://example.com/pasted"],
+      SAMPLE,
+    );
+    expect(code).toBe(0);
+    expect(stdout).toContain("> Source: https://example.com/pasted");
+  });
+
+  it("rejects --stdin combined with a URL", async () => {
+    const { stderr, code } = await runCliWithInput(
+      ["--stdin", `${base}/guide`],
+      SAMPLE,
+    );
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("--stdin");
+  });
+
+  it("drops link URLs with --no-links", async () => {
+    const { stdout, code } = await runCli(["--no-links", `${base}/guide`]);
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("[CO2 bloom](http");
+    expect(stdout).toContain("CO2 bloom");
+  });
+
+  it("drops images with --no-images", async () => {
+    const { stdout, code } = await runCli(["--no-images", `${base}/guide`]);
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("![Pour-over setup]");
+  });
+
+  it("concatenates multiple URLs in batch mode", async () => {
+    const { stdout, code } = await runCli([
+      `${base}/guide`,
+      `${base}/other`,
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("# How to Make Pour-Over Coffee");
+    expect(stdout).toContain("---");
+    expect(stdout).toContain("# Other Page");
+  });
+
+  it("errors when no URL and no --stdin", async () => {
+    const { stderr, code } = await runCli([]);
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("missing required argument");
   });
 });

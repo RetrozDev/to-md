@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
-import { toMarkdown } from "./index.js";
+import { markdownFromHtml, toMarkdown } from "./index.js";
 
 const SAMPLE = readFileSync(
   new URL("./test/fixtures/sample.html", import.meta.url),
@@ -93,7 +93,9 @@ describe("toMarkdown", () => {
   it("truncates by maxChars at a paragraph boundary", async () => {
     const result = await toMarkdown(`${base}/guide`, { maxChars: 120 });
     expect(result.truncated).toBe(true);
-    expect(result.markdown.length).toBeLessThanOrEqual(120);
+    expect(result.markdown).toContain("<!-- truncated");
+    // Truncation + the marker can slightly exceed the requested cap.
+    expect(result.markdown.length).toBeLessThanOrEqual(120 + 80);
   });
 
   it("truncates by maxTokens", async () => {
@@ -121,5 +123,37 @@ describe("toMarkdown", () => {
 
   it("rejects non-http(s) URLs", async () => {
     await expect(toMarkdown("file:///tmp/x.html")).rejects.toThrow(/unsupported protocol/);
+  });
+});
+
+describe("markdownFromHtml", () => {
+  it("converts HTML without fetching", () => {
+    const result = markdownFromHtml(SAMPLE, `${base}/guide`);
+    expect(result.markdown).toContain("**simple, repeatable**");
+    expect(result.sourceUrl).toBe(`${base}/guide`);
+  });
+
+  it("includes published date and author in the header", () => {
+    const result = markdownFromHtml(SAMPLE, `${base}/guide`);
+    expect(result.markdown).toContain("Published: 2026-08-13T10:00:00Z");
+    expect(result.markdown).toContain("By: Jane Doe");
+  });
+
+  it("drops link URLs with links: false", () => {
+    const result = markdownFromHtml(SAMPLE, `${base}/guide`, { links: false });
+    expect(result.markdown).not.toContain("[CO2 bloom](http");
+    expect(result.markdown).toContain("CO2 bloom");
+  });
+
+  it("drops images with images: false", () => {
+    const result = markdownFromHtml(SAMPLE, `${base}/guide`, { images: false });
+    expect(result.markdown).not.toContain("![Pour-over setup]");
+    expect(result.markdown).toContain("**simple, repeatable**");
+  });
+
+  it("appends a truncation marker when capped", () => {
+    const result = markdownFromHtml(SAMPLE, `${base}/guide`, { maxChars: 80 });
+    expect(result.truncated).toBe(true);
+    expect(result.markdown).toContain("<!-- truncated");
   });
 });
